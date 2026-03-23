@@ -24,6 +24,41 @@ logger = get_logger('miroshark.api.simulation')
 INTERVIEW_PROMPT_PREFIX = "Based on your persona, all past memories and actions, reply directly with text without calling any tools: "
 
 
+def _ensure_env_alive(simulation_id: str) -> bool:
+    """
+    Check if simulation environment is alive. If not, try to restart it
+    in env-only mode for interviews. Returns True if env is alive.
+    """
+    if SimulationRunner.check_env_alive(simulation_id):
+        return True
+
+    # Try to auto-restart the environment
+    logger.info(f"Environment not alive for {simulation_id}, attempting auto-restart for interviews...")
+    is_prepared, _ = _check_simulation_prepared(simulation_id)
+    if not is_prepared:
+        return False
+
+    try:
+        SimulationRunner.start_simulation(
+            simulation_id=simulation_id,
+            platform='parallel',
+            start_round=0,
+            env_only=True
+        )
+        # Wait a bit for the env to start
+        import time
+        for _ in range(15):
+            time.sleep(2)
+            if SimulationRunner.check_env_alive(simulation_id):
+                logger.info(f"Environment auto-restarted for {simulation_id}")
+                return True
+        logger.warning(f"Environment auto-restart timed out for {simulation_id}")
+        return False
+    except Exception as e:
+        logger.error(f"Failed to auto-restart environment: {e}")
+        return False
+
+
 def optimize_interview_prompt(prompt: str) -> str:
     """
     Optimize interview prompt by adding prefix to prevent Agent from calling tools
@@ -298,7 +333,7 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
         # - completed: run finished, preparation was done long ago
         # - stopped: stopped, preparation was done long ago
         # - failed: run failed (but preparation is complete)
-        prepared_statuses = ["ready", "preparing", "running", "completed", "stopped", "failed"]
+        prepared_statuses = ["ready", "preparing", "running", "completed", "stopped", "failed", "paused"]
         if status in prepared_statuses and config_generated:
             # Get file statistics
             profiles_file = os.path.join(simulation_dir, "reddit_profiles.json")
@@ -1498,6 +1533,15 @@ def start_simulation():
         max_rounds = data.get('max_rounds')  # Optional: maximum simulation rounds
         enable_graph_memory_update = data.get('enable_graph_memory_update', False)  # Optional: whether to enable graph memory update
         force = data.get('force', False)  # Optional: force restart
+        resume = data.get('resume', False)  # Optional: resume from last round
+
+        # If resume requested, read the last round from run_state
+        start_round = 0
+        if resume:
+            existing_state = SimulationRunner.get_run_state(simulation_id)
+            if existing_state and existing_state.current_round > 0:
+                start_round = existing_state.current_round
+                logger.info(f"Resuming simulation {simulation_id} from round {start_round}")
 
         # Validate max_rounds parameter
         if max_rounds is not None:
@@ -1557,8 +1601,8 @@ def start_simulation():
                                 "error": "Simulation is running, please call /stop endpoint to stop first, or use force=true to force restart"
                             }), 400
 
-                # If force mode, clean up run logs
-                if force:
+                # If force mode (and not resuming), clean up run logs
+                if force and not resume:
                     logger.info(f"Force mode: cleaning simulation logs {simulation_id}")
                     cleanup_result = SimulationRunner.cleanup_simulation_logs(simulation_id)
                     if not cleanup_result.get("success"):
@@ -1607,7 +1651,8 @@ def start_simulation():
             max_rounds=max_rounds,
             enable_graph_memory_update=enable_graph_memory_update,
             graph_id=graph_id,
-            storage=sim_storage
+            storage=sim_storage,
+            start_round=start_round
         )
         
         # Update simulation status
@@ -1619,6 +1664,9 @@ def start_simulation():
             response_data['max_rounds_applied'] = max_rounds
         response_data['graph_memory_update_enabled'] = enable_graph_memory_update
         response_data['force_restarted'] = force_restarted
+        response_data['resumed'] = resume and start_round > 0
+        if start_round > 0:
+            response_data['resumed_from_round'] = start_round
         if enable_graph_memory_update:
             response_data['graph_id'] = graph_id
         
@@ -2063,81 +2111,6 @@ def get_simulation_posts(simulation_id: str):
         }), 500
 
 
-@simulation_bp.route('/<simulation_id>/comments', methods=['GET'])
-def get_simulation_comments(simulation_id: str):
-    """
-    Get simulation comments (Reddit only)
-
-    Query parameters:
-        post_id: Filter post ID (optional)
-        limit: Return count
-        offset: Offset
-    """
-    try:
-        post_id = request.args.get('post_id')
-        limit = request.args.get('limit', 50, type=int)
-        offset = request.args.get('offset', 0, type=int)
-        
-        sim_dir = os.path.join(
-            os.path.dirname(__file__),
-            f'../../uploads/simulations/{simulation_id}'
-        )
-        
-        db_path = os.path.join(sim_dir, "reddit_simulation.db")
-        
-        if not os.path.exists(db_path):
-            return jsonify({
-                "success": True,
-                "data": {
-                    "count": 0,
-                    "comments": []
-                }
-            })
-        
-        import sqlite3
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        try:
-            if post_id:
-                cursor.execute("""
-                    SELECT * FROM comment 
-                    WHERE post_id = ?
-                    ORDER BY created_at DESC 
-                    LIMIT ? OFFSET ?
-                """, (post_id, limit, offset))
-            else:
-                cursor.execute("""
-                    SELECT * FROM comment 
-                    ORDER BY created_at DESC 
-                    LIMIT ? OFFSET ?
-                """, (limit, offset))
-            
-            comments = [dict(row) for row in cursor.fetchall()]
-            
-        except sqlite3.OperationalError:
-            comments = []
-        
-        conn.close()
-        
-        return jsonify({
-            "success": True,
-            "data": {
-                "count": len(comments),
-                "comments": comments
-            }
-        })
-        
-    except Exception as e:
-        logger.error(f"Failed to get comments: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
-
-
 # ============== Interview Endpoints ==============
 
 @simulation_bp.route('/interview', methods=['POST'])
@@ -2226,11 +2199,11 @@ def interview_agent():
                 "error": "platform parameter can only be 'twitter' or 'reddit'"
             }), 400
 
-        # Check environment status
-        if not SimulationRunner.check_env_alive(simulation_id):
+        # Check environment status — auto-restart if needed
+        if not _ensure_env_alive(simulation_id):
             return jsonify({
                 "success": False,
-                "error": "Simulation environment is not running or has been shut down. Please ensure the simulation is complete and in command waiting mode."
+                "error": "Simulation environment could not be started. Please try again."
             }), 400
 
         # Optimize prompt, add prefix to prevent agent from calling tools
@@ -2361,11 +2334,11 @@ def interview_agents_batch():
                     "error": f"Interview list item {i+1} platform can only be 'twitter' or 'reddit'"
                 }), 400
 
-        # Check environment status
-        if not SimulationRunner.check_env_alive(simulation_id):
+        # Check environment status — auto-restart if needed
+        if not _ensure_env_alive(simulation_id):
             return jsonify({
                 "success": False,
-                "error": "Simulation environment is not running or has been shut down. Please ensure the simulation is complete and in command waiting mode."
+                "error": "Simulation environment could not be started. Please try again."
             }), 400
 
         # Optimize each interview item's prompt, add prefix to prevent agent from calling tools
@@ -2401,109 +2374,6 @@ def interview_agents_batch():
 
     except Exception as e:
         logger.error(f"Batch interview failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
-
-
-@simulation_bp.route('/interview/all', methods=['POST'])
-def interview_all_agents():
-    """
-    Global interview - interview all agents with the same question
-
-    Note: This feature requires the simulation environment to be running
-
-    Request (JSON):
-        {
-            "simulation_id": "sim_xxxx",                                // Required, simulation ID
-            "prompt": "What is your overall opinion on this?",          // Required, interview question (same question for all agents)
-            "platform": "reddit",                                       // Optional, specify platform (twitter/reddit)
-                                                                        // When not specified: dual-platform simulation interviews each agent on both platforms simultaneously
-            "timeout": 180                                              // Optional, timeout (seconds), default 180
-        }
-
-    Returns:
-        {
-            "success": true,
-            "data": {
-                "interviews_count": 50,
-                "result": {
-                    "interviews_count": 100,
-                    "results": {
-                        "twitter_0": {"agent_id": 0, "response": "...", "platform": "twitter"},
-                        "reddit_0": {"agent_id": 0, "response": "...", "platform": "reddit"},
-                        ...
-                    }
-                },
-                "timestamp": "2025-12-08T10:00:01"
-            }
-        }
-    """
-    try:
-        data = request.get_json() or {}
-
-        simulation_id = data.get('simulation_id')
-        prompt = data.get('prompt')
-        platform = data.get('platform')  # Optional: twitter/reddit/None
-        timeout = data.get('timeout', 180)
-
-        if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": "Please provide simulation_id"
-            }), 400
-
-        if not prompt:
-            return jsonify({
-                "success": False,
-                "error": "Please provide prompt (interview question)"
-            }), 400
-
-        # Validate platform parameter
-        if platform and platform not in ("twitter", "reddit"):
-            return jsonify({
-                "success": False,
-                "error": "platform parameter can only be 'twitter' or 'reddit'"
-            }), 400
-
-        # Check environment status
-        if not SimulationRunner.check_env_alive(simulation_id):
-            return jsonify({
-                "success": False,
-                "error": "Simulation environment is not running or has been shut down. Please ensure the simulation is complete and in command waiting mode."
-            }), 400
-
-        # Optimize prompt, add prefix to prevent agent from calling tools
-        optimized_prompt = optimize_interview_prompt(prompt)
-
-        result = SimulationRunner.interview_all_agents(
-            simulation_id=simulation_id,
-            prompt=optimized_prompt,
-            platform=platform,
-            timeout=timeout
-        )
-
-        return jsonify({
-            "success": result.get("success", False),
-            "data": result
-        })
-
-    except ValueError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 400
-
-    except TimeoutError as e:
-        return jsonify({
-            "success": False,
-            "error": f"Timed out waiting for global interview response: {str(e)}"
-        }), 504
-
-    except Exception as e:
-        logger.error(f"Global interview failed: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -2641,6 +2511,62 @@ def get_env_status():
 
     except Exception as e:
         logger.error(f"Failed to get environment status: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
+@simulation_bp.route('/restart-env', methods=['POST'])
+def restart_env():
+    """
+    Restart simulation environment for interviews (without running simulation).
+    Launches the simulation script with --env-only flag.
+    """
+    try:
+        data = request.get_json() or {}
+        simulation_id = data.get('simulation_id')
+
+        if not simulation_id:
+            return jsonify({"success": False, "error": "Please provide simulation_id"}), 400
+
+        # Check if env is already alive
+        if SimulationRunner.check_env_alive(simulation_id):
+            return jsonify({
+                "success": True,
+                "data": {
+                    "simulation_id": simulation_id,
+                    "message": "Environment is already running",
+                    "already_running": True
+                }
+            })
+
+        # Check if simulation is prepared
+        is_prepared, _ = _check_simulation_prepared(simulation_id)
+        if not is_prepared:
+            return jsonify({"success": False, "error": "Simulation not prepared"}), 400
+
+        # Start the simulation script with --env-only
+        run_state = SimulationRunner.start_simulation(
+            simulation_id=simulation_id,
+            platform='parallel',
+            start_round=0,
+            env_only=True
+        )
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "simulation_id": simulation_id,
+                "process_pid": run_state.process_pid,
+                "message": "Environment starting for interviews",
+                "already_running": False
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to restart env: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),

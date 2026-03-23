@@ -23,7 +23,7 @@
       <div class="header-right">
         <div class="workflow-step">
           <span class="step-num">Step 3/5</span>
-          <span class="step-name">Start Simulation</span>
+          <span class="step-name">Simulation</span>
         </div>
         <div class="step-divider"></div>
         <span class="status-indicator" :class="statusClass">
@@ -188,7 +188,7 @@ const handleGoBack = async () => {
     addLog(`Failed to check simulation status: ${err.message}`)
   }
 
-  // Return to Step 2 (Environment Setup)
+  // Return to Step 2 (Agent Setup)
   router.push({ name: 'Simulation', params: { simulationId: currentSimulationId.value } })
 }
 
@@ -317,7 +317,7 @@ onUnmounted(() => {
   flex-direction: column;
   background: #FFF;
   overflow: hidden;
-  font-family: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
 }
 
 /* Header */

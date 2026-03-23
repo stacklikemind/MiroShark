@@ -14,8 +14,8 @@
   box-sizing: border-box;
 }
 
-#app {
-  font-family: 'JetBrains Mono', 'Space Grotesk', 'Noto Sans SC', monospace;
+body, #app {
+  font-family: 'Inter', 'Space Grotesk', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: #000000;

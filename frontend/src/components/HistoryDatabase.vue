@@ -40,7 +40,7 @@
             >◇</span>
             <span
               class="status-icon available"
-              title="Env Setup"
+              title="Agent Setup"
             >◈</span>
             <span
               class="status-icon"
@@ -167,7 +167,7 @@
               >
                 <span class="btn-step">Step2</span>
                 <span class="btn-icon">◈</span>
-                <span class="btn-text">Env Setup</span>
+                <span class="btn-text">Agent Setup</span>
               </button>
               <button
                 class="modal-btn btn-report"
@@ -412,7 +412,7 @@ const goToProject = () => {
   }
 }
 
-// Navigate to environment setup page (Simulation)
+// Navigate to agent setup page (Simulation)
 const goToSimulation = () => {
   if (selectedProject.value?.simulation_id) {
     router.push({
@@ -722,7 +722,7 @@ onUnmounted(() => {
 
 /* Different feature colors */
 .status-icon:nth-child(1).available { color: #3B82F6; } /* Graph Build - Blue */
-.status-icon:nth-child(2).available { color: #F59E0B; } /* Env Setup - Orange */
+.status-icon:nth-child(2).available { color: #F59E0B; } /* Agent Setup - Orange */
 .status-icon:nth-child(3).available { color: #10B981; } /* Analysis Report - Green */
 
 .status-icon.unavailable {
@@ -1035,6 +1035,7 @@ onUnmounted(() => {
   border: 1px solid #E5E7EB;
   border-radius: 8px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  font-family: 'Inter', 'Space Grotesk', system-ui, sans-serif;
 }
 
 /* Animation transition */

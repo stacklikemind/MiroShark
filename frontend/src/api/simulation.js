@@ -93,6 +93,18 @@ export const stopSimulation = (data) => {
 }
 
 /**
+ * Resume simulation from last completed round
+ * @param {Object} data - { simulation_id, platform?, enable_graph_memory_update? }
+ */
+export const resumeSimulation = (data) => {
+  return requestWithRetry(() => service.post('/api/simulation/start', {
+    ...data,
+    resume: true,
+    force: true  // force past status checks since previous run failed/stopped
+  }), 3, 1000)
+}
+
+/**
  * Get simulation run real-time status
  * @param {string} simulationId
  */
@@ -150,6 +162,14 @@ export const getAgentStats = (simulationId) => {
  */
 export const getSimulationActions = (simulationId, params = {}) => {
   return service.get(`/api/simulation/${simulationId}/actions`, { params })
+}
+
+/**
+ * Restart simulation environment for interviews (without running simulation)
+ * @param {Object} data - { simulation_id }
+ */
+export const restartEnv = (data) => {
+  return requestWithRetry(() => service.post('/api/simulation/restart-env', data), 3, 1000)
 }
 
 /**

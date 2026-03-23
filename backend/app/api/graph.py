@@ -53,70 +53,6 @@ def get_project(project_id: str):
     })
 
 
-@graph_bp.route('/project/list', methods=['GET'])
-def list_projects():
-    """
-    List all projects
-    """
-    limit = request.args.get('limit', 50, type=int)
-    projects = ProjectManager.list_projects(limit=limit)
-    
-    return jsonify({
-        "success": True,
-        "data": [p.to_dict() for p in projects],
-        "count": len(projects)
-    })
-
-
-@graph_bp.route('/project/<project_id>', methods=['DELETE'])
-def delete_project(project_id: str):
-    """
-    Delete a project
-    """
-    success = ProjectManager.delete_project(project_id)
-    
-    if not success:
-        return jsonify({
-            "success": False,
-            "error": f"Project not found or deletion failed: {project_id}"
-        }), 404
-    
-    return jsonify({
-        "success": True,
-        "message": f"Project deleted: {project_id}"
-    })
-
-
-@graph_bp.route('/project/<project_id>/reset', methods=['POST'])
-def reset_project(project_id: str):
-    """
-    Reset project state (for rebuilding the graph)
-    """
-    project = ProjectManager.get_project(project_id)
-    
-    if not project:
-        return jsonify({
-            "success": False,
-            "error": f"Project not found: {project_id}"
-        }), 404
-
-    # Reset to ontology-generated state
-    if project.ontology:
-        project.status = ProjectStatus.ONTOLOGY_GENERATED
-    else:
-        project.status = ProjectStatus.CREATED
-    
-    project.graph_id = None
-    project.graph_build_task_id = None
-    project.error = None
-    ProjectManager.save_project(project)
-    
-    return jsonify({
-        "success": True,
-        "message": f"Project reset: {project_id}",
-        "data": project.to_dict()
-    })
-
 
 # ============== API 1: Upload files and generate ontology ==============
 
@@ -531,20 +467,6 @@ def get_task(task_id: str):
     })
 
 
-@graph_bp.route('/tasks', methods=['GET'])
-def list_tasks():
-    """
-    List all tasks
-    """
-    tasks = TaskManager().list_tasks()
-    
-    return jsonify({
-        "success": True,
-        "data": [t.to_dict() for t in tasks],
-        "count": len(tasks)
-    })
-
-
 # ============== Graph Data APIs ==============
 
 @graph_bp.route('/data/<graph_id>', methods=['GET'])
@@ -576,30 +498,3 @@ def get_graph_data(graph_id: str):
         }), 500
 
 
-@graph_bp.route('/delete/<graph_id>', methods=['DELETE'])
-def delete_graph(graph_id: str):
-    """
-    Delete graph
-    """
-    try:
-        storage = current_app.extensions.get('neo4j_storage')
-        if not storage:
-            return jsonify({
-                "success": False,
-                "error": "Neo4j storage is not initialized"
-            }), 503
-
-        builder = GraphBuilderService(storage=storage)
-        builder.delete_graph(graph_id)
-        
-        return jsonify({
-            "success": True,
-            "message": f"Graph deleted: {graph_id}"
-        })
-        
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500

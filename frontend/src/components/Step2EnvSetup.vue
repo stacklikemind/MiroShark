@@ -21,21 +21,21 @@
           </p>
 
           <div v-if="simulationId" class="info-card">
-            <div class="info-row">
+            <div class="info-row" @click="copyValue(projectData?.project_id)">
               <span class="info-label">Project ID</span>
-              <span class="info-value mono">{{ projectData?.project_id }}</span>
+              <span class="info-value mono copyable">{{ projectData?.project_id }}</span>
             </div>
-            <div class="info-row">
+            <div class="info-row" @click="copyValue(projectData?.graph_id)">
               <span class="info-label">Graph ID</span>
-              <span class="info-value mono">{{ projectData?.graph_id }}</span>
+              <span class="info-value mono copyable">{{ projectData?.graph_id }}</span>
             </div>
-            <div class="info-row">
+            <div class="info-row" @click="copyValue(simulationId)">
               <span class="info-label">Simulation ID</span>
-              <span class="info-value mono">{{ simulationId }}</span>
+              <span class="info-value mono copyable">{{ simulationId }}</span>
             </div>
-            <div class="info-row">
+            <div class="info-row" @click="copyValue(taskId)">
               <span class="info-label">Task ID</span>
-              <span class="info-value mono">{{ taskId || 'Async task completed' }}</span>
+              <span class="info-value mono copyable">{{ taskId || 'Async task completed' }}</span>
             </div>
           </div>
         </div>
@@ -113,12 +113,12 @@
         </div>
       </div>
 
-      <!-- Step 03: Generate Dual-Platform Simulation Config -->
+      <!-- Step 03: Generate Simulation Config -->
       <div class="step-card" :class="{ 'active': phase === 2, 'completed': phase > 2 }">
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">03</span>
-            <span class="step-title">Generate Dual-Platform Simulation Config</span>
+            <span class="step-title">Generate Simulation Config</span>
           </div>
           <div class="step-status">
             <span v-if="phase > 2" class="badge success">Completed</span>
@@ -521,7 +521,7 @@
               :disabled="phase < 4"
               @click="handleStartSimulation"
             >
-              Start Dual-World Parallel Simulation ➝
+              {{ hasRunBefore ? 'Resume Simulation ➝' : 'Start Simulation ➝' }}
             </button>
           </div>
         </div>
@@ -616,12 +616,12 @@
     </Transition>
 
     <!-- Bottom Info / Logs -->
-    <div class="system-logs">
-      <div class="log-header">
-        <span class="log-title">SYSTEM DASHBOARD</span>
+    <div class="system-logs" :class="{ collapsed: dashboardCollapsed }">
+      <div class="log-header" @click="dashboardCollapsed = !dashboardCollapsed">
+        <span class="log-title">SYSTEM DASHBOARD <span class="log-toggle">{{ dashboardCollapsed ? '▲' : '▼' }}</span></span>
         <span class="log-id">{{ simulationId || 'NO_SIMULATION' }}</span>
       </div>
-      <div class="log-content" ref="logContent">
+      <div v-show="!dashboardCollapsed" class="log-content" ref="logContent">
         <div class="log-line" v-for="(log, idx) in systemLogs" :key="idx">
           <span class="log-time">{{ log.time }}</span>
           <span class="log-msg">{{ log.msg }}</span>
@@ -633,12 +633,13 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { 
-  prepareSimulation, 
-  getPrepareStatus, 
+import {
+  prepareSimulation,
+  getPrepareStatus,
   getSimulationProfilesRealtime,
   getSimulationConfig,
-  getSimulationConfigRealtime 
+  getSimulationConfigRealtime,
+  getRunStatus
 } from '../api/simulation'
 
 const props = defineProps({
@@ -1057,6 +1058,13 @@ const loadPreparedData = async () => {
 
 // Scroll log to bottom
 const logContent = ref(null)
+const dashboardCollapsed = ref(false)
+const hasRunBefore = ref(false)
+
+const copyValue = (val) => {
+  if (!val) return
+  navigator.clipboard.writeText(val)
+}
 watch(() => props.systemLogs?.length, () => {
   nextTick(() => {
     if (logContent.value) {
@@ -1065,10 +1073,19 @@ watch(() => props.systemLogs?.length, () => {
   })
 })
 
-onMounted(() => {
-  // Automatically start preparation flow
+onMounted(async () => {
   if (props.simulationId) {
-    addLog('Step 2 Environment Setup Initializing')
+    // Check if this simulation has run before
+    try {
+      const res = await getRunStatus(props.simulationId)
+      if (res.success && res.data && res.data.current_round > 0) {
+        hasRunBefore.value = true
+      }
+    } catch (err) {
+      // no run state — fresh simulation
+    }
+
+    addLog('Step 2 Agent Setup Initializing')
     startPrepareSimulation()
   }
 })
@@ -1086,7 +1103,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background: #FAFAFA;
-  font-family: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
 }
 
 .scroll-container {
@@ -1246,6 +1263,17 @@ onUnmounted(() => {
   align-items: center;
   padding: 8px 0;
   border-bottom: 1px dashed #E0E0E0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.info-row:hover .info-value.copyable {
+  color: #000;
+  text-decoration: underline;
+}
+
+.info-row:active .info-value.copyable {
+  color: #1A936F;
 }
 
 .info-row:last-child {
@@ -2066,6 +2094,20 @@ onUnmounted(() => {
   margin-bottom: 8px;
   font-size: 10px;
   color: #888;
+  cursor: pointer;
+  user-select: none;
+}
+
+.system-logs.collapsed .log-header {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+.log-toggle {
+  font-size: 8px;
+  opacity: 0.5;
+  margin-left: 4px;
 }
 
 .log-content {
@@ -2164,7 +2206,7 @@ onUnmounted(() => {
 }
 
 .narrative-text {
-  font-family: 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 14px;
   color: #334155;
   line-height: 1.8;

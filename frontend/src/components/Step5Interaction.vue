@@ -86,7 +86,7 @@
           </svg>
           <div class="action-bar-text">
             <span class="action-bar-title">Interactive Tools</span>
-            <span class="action-bar-subtitle mono">{{ profiles.length }} agents available</span>
+            <span class="action-bar-subtitle mono">{{ profiles.length }} personas available</span>
           </div>
         </div>
           <div class="action-bar-tabs">
@@ -110,7 +110,7 @@
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                   <circle cx="12" cy="7" r="4"></circle>
                 </svg>
-                <span>{{ selectedAgent ? selectedAgent.username : 'Chat with any individual in the world' }}</span>
+                <span>{{ selectedAgent ? selectedAgent.username : 'Persona Chat' }}</span>
                 <svg class="dropdown-arrow" :class="{ open: showAgentDropdown }" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
@@ -141,7 +141,7 @@
                 <path d="M9 11l3 3L22 4"></path>
                 <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
               </svg>
-              <span>Send Survey to the World</span>
+              <span>Group Questions</span>
             </button>
           </div>
         </div>
@@ -219,8 +219,8 @@
           <!-- Agent Profile Card -->
           <div v-if="chatTarget === 'agent' && selectedAgent" class="agent-profile-card">
             <div class="profile-card-header">
-              <div class="profile-card-avatar">{{ (selectedAgent.username || 'A')[0] }}</div>
-              <div class="profile-card-info">
+              <div class="profile-card-avatar clickable" @click="openProfilePopup(selectedAgent)">{{ (selectedAgent.username || 'A')[0] }}</div>
+              <div class="profile-card-info clickable" @click="openProfilePopup(selectedAgent)">
                 <div class="profile-card-name">{{ selectedAgent.username }}</div>
                 <div class="profile-card-meta">
                   <span v-if="selectedAgent.name" class="profile-card-handle">@{{ selectedAgent.name }}</span>
@@ -317,7 +317,7 @@
           <div class="survey-setup">
             <div class="setup-section">
               <div class="section-header">
-                <span class="section-title">Select Survey Targets</span>
+                <span class="section-title">Select Persona</span>
                 <span class="selection-count">Selected {{ selectedAgents.size }} / {{ profiles.length }}</span>
               </div>
               <div class="agents-grid">
@@ -353,7 +353,7 @@
 
             <div class="setup-section">
               <div class="section-header">
-                <span class="section-title">Survey Question</span>
+                <span class="section-title">Persona Question</span>
               </div>
               <textarea 
                 v-model="surveyQuestion"
@@ -369,14 +369,14 @@
               @click="submitSurvey"
             >
               <span v-if="isSurveying" class="loading-spinner"></span>
-              <span v-else>Send Survey</span>
+              <span v-else>Send Question</span>
             </button>
           </div>
 
-          <!-- Survey Results -->
+          <!-- Results -->
           <div v-if="surveyResults.length > 0" class="survey-results">
             <div class="results-header">
-              <span class="results-title">Survey Results</span>
+              <span class="results-title">Results</span>
               <span class="results-count">{{ surveyResults.length }} responses</span>
             </div>
             <div class="results-list">
@@ -408,12 +408,79 @@
       </div>
     </div>
   </div>
+
+  <!-- Profile Popup Modal -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="showProfilePopup && profilePopupAgent" class="profile-popup-overlay" @click.self="closeProfilePopup">
+        <div class="profile-popup">
+          <div class="profile-popup-header">
+            <div class="profile-popup-avatar">{{ (profilePopupAgent.username || 'A')[0] }}</div>
+            <div class="profile-popup-info">
+              <div class="profile-popup-name">{{ profilePopupAgent.username }}</div>
+              <div class="profile-popup-meta">{{ profilePopupAgent.profession || '' }}</div>
+            </div>
+            <button class="profile-popup-close" @click="closeProfilePopup">&times;</button>
+          </div>
+
+          <div class="profile-popup-details">
+            <div class="profile-popup-row" v-if="profilePopupAgent.bio">
+              <span class="popup-label">Bio</span>
+              <span class="popup-value">{{ profilePopupAgent.bio }}</span>
+            </div>
+            <div class="profile-popup-stats">
+              <span v-if="profilePopupAgent.age" class="popup-stat">{{ profilePopupAgent.age }}y</span>
+              <span v-if="profilePopupAgent.gender" class="popup-stat">{{ profilePopupAgent.gender }}</span>
+              <span v-if="profilePopupAgent.mbti" class="popup-stat">{{ profilePopupAgent.mbti }}</span>
+              <span v-if="profilePopupAgent.country" class="popup-stat">{{ profilePopupAgent.country }}</span>
+            </div>
+            <div class="profile-popup-row" v-if="profilePopupAgent.persona">
+              <span class="popup-label" @click="showFullPersona = !showFullPersona" style="cursor:pointer">Persona {{ showFullPersona ? '▼' : '▶' }}</span>
+              <span class="popup-value popup-persona" :class="{ clamped: !showFullPersona }">{{ profilePopupAgent.persona }}</span>
+            </div>
+          </div>
+
+          <div class="profile-popup-activity">
+            <div class="popup-section-title">Simulation Activity ({{ profilePopupActions.length }})</div>
+            <div v-if="profilePopupLoading" class="popup-loading">Loading...</div>
+            <div v-else-if="profilePopupActions.length === 0" class="popup-empty">No activity recorded</div>
+            <div v-else class="popup-actions-list">
+              <div
+                v-for="(action, i) in profilePopupActions"
+                :key="i"
+                class="popup-action-item"
+                :class="{ expanded: expandedActions.has(i) }"
+                @click="toggleAction(i)"
+              >
+                <div class="popup-action-header">
+                  <span class="popup-action-badge" :class="'type-' + (action.action_type || '').toLowerCase()">{{ getActionLabel(action.action_type) }}</span>
+                  <span class="popup-action-round">R{{ action.round_num }}</span>
+                  <span class="popup-action-preview" v-if="action.action_args?.content">{{ action.action_args.content }}</span>
+                  <span class="popup-action-preview" v-else-if="action.action_args?.quote_content">{{ action.action_args.quote_content }}</span>
+                  <span class="popup-action-preview" v-else-if="action.action_args?.post_content">"{{ action.action_args.post_content }}"</span>
+                  <span class="popup-action-preview" v-else-if="action.action_args?.target_user_name">@{{ action.action_args.target_user_name }}</span>
+                </div>
+                <div v-if="expandedActions.has(i)" class="popup-action-full">
+                  <p v-if="action.action_args?.content">{{ action.action_args.content }}</p>
+                  <p v-if="action.action_args?.quote_content"><strong>Quote:</strong> {{ action.action_args.quote_content }}</p>
+                  <p v-if="action.action_args?.post_content"><strong>Original:</strong> {{ action.action_args.post_content }}</p>
+                  <p v-if="action.action_args?.original_content"><strong>Ref:</strong> {{ action.action_args.original_content }}</p>
+                  <p v-if="action.action_args?.target_user_name"><strong>Target:</strong> @{{ action.action_args.target_user_name }}</p>
+                  <p v-if="action.action_args?.query"><strong>Query:</strong> {{ action.action_args.query }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { chatWithReport, getReport, getAgentLog } from '../api/report'
-import { interviewAgents, getSimulationProfilesRealtime } from '../api/simulation'
+import { interviewAgents, getSimulationProfilesRealtime, getSimulationActions } from '../api/simulation'
 
 const props = defineProps({
   reportId: String,
@@ -426,6 +493,55 @@ const emit = defineEmits(['add-log', 'update-status'])
 const activeTab = ref('chat')
 const chatTarget = ref('report_agent')
 const showAgentDropdown = ref(false)
+const dropdownMenuRef = ref(null)
+const dropdownStyle = ref({})
+const showProfilePopup = ref(false)
+const profilePopupAgent = ref(null)
+const profilePopupActions = ref([])
+const profilePopupLoading = ref(false)
+const showFullPersona = ref(false)
+const expandedActions = ref(new Set())
+
+const toggleAction = (i) => {
+  const s = new Set(expandedActions.value)
+  if (s.has(i)) s.delete(i); else s.add(i)
+  expandedActions.value = s
+}
+
+const openProfilePopup = async (agent) => {
+  profilePopupAgent.value = agent
+  profilePopupActions.value = []
+  showFullPersona.value = false
+  expandedActions.value = new Set()
+  showProfilePopup.value = true
+  profilePopupLoading.value = true
+  try {
+    const res = await getSimulationActions(props.simulationId, { agent_id: agent.user_id, limit: 200 })
+    if (res.success && res.data) {
+      profilePopupActions.value = res.data.actions || res.data || []
+    }
+  } catch (err) {
+    console.warn('Failed to load agent actions:', err)
+  } finally {
+    profilePopupLoading.value = false
+  }
+}
+
+const closeProfilePopup = () => {
+  showProfilePopup.value = false
+  profilePopupAgent.value = null
+  profilePopupActions.value = []
+}
+
+const getActionLabel = (type) => {
+  const labels = {
+    'CREATE_POST': 'POST', 'REPOST': 'REPOST', 'LIKE_POST': 'LIKE',
+    'CREATE_COMMENT': 'COMMENT', 'QUOTE_POST': 'QUOTE', 'FOLLOW': 'FOLLOW',
+    'DO_NOTHING': 'IDLE', 'SEARCH_POSTS': 'SEARCH',
+    'UPVOTE_POST': 'UPVOTE', 'DOWNVOTE_POST': 'DOWNVOTE'
+  }
+  return labels[type] || type
+}
 const selectedAgent = ref(null)
 const selectedAgentIndex = ref(null)
 const showFullProfile = ref(true)
@@ -964,7 +1080,7 @@ watch(() => props.simulationId, (newId) => {
   display: flex;
   flex-direction: column;
   background: #F8F9FA;
-  font-family: 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   overflow: hidden;
 }
 
@@ -1050,7 +1166,7 @@ watch(() => props.simulationId, (newId) => {
 }
 
 .main-title {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 36px;
   font-weight: 700;
   color: #111827;
@@ -1060,7 +1176,7 @@ watch(() => props.simulationId, (newId) => {
 }
 
 .sub-title {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 16px;
   color: #6B7280;
   font-style: italic;
@@ -1127,7 +1243,7 @@ watch(() => props.simulationId, (newId) => {
 }
 
 .section-title {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 24px;
   font-weight: 600;
   color: #111827;
@@ -1160,7 +1276,7 @@ watch(() => props.simulationId, (newId) => {
 
 /* Generated Content */
 .generated-content {
-  font-family: 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.8;
   color: #374151;
@@ -1173,7 +1289,7 @@ watch(() => props.simulationId, (newId) => {
 .generated-content :deep(.md-h2),
 .generated-content :deep(.md-h3),
 .generated-content :deep(.md-h4) {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   color: #111827;
   margin-top: 1.5em;
   margin-bottom: 0.8em;
@@ -1200,7 +1316,7 @@ watch(() => props.simulationId, (newId) => {
   margin: 1.5em 0;
   color: #6B7280;
   font-style: italic;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
 }
 
 .generated-content :deep(.code-block) {
@@ -1239,7 +1355,7 @@ watch(() => props.simulationId, (newId) => {
 }
 
 .loading-text {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 15px;
   color: #4B5563;
 }
@@ -1250,7 +1366,7 @@ watch(() => props.simulationId, (newId) => {
 
 /* Content Styles Override */
 .generated-content :deep(.md-h2) {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 18px;
   margin-top: 0;
 }
@@ -1305,7 +1421,6 @@ watch(() => props.simulationId, (newId) => {
   display: flex;
   flex-direction: column;
   background: #FFFFFF;
-  overflow: hidden;
 }
 
 /* Action Bar - Professional Design */
@@ -1317,6 +1432,9 @@ watch(() => props.simulationId, (newId) => {
   border-bottom: 1px solid #E5E7EB;
   background: linear-gradient(180deg, #FFFFFF 0%, #FAFBFC 100%);
   gap: 16px;
+  position: relative;
+  z-index: 20;
+  overflow: visible;
 }
 
 .action-bar-header {
@@ -1817,17 +1935,16 @@ watch(() => props.simulationId, (newId) => {
 
 .dropdown-menu {
   position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 240px;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 280px;
   background: #FFFFFF;
   border: 1px solid #E5E7EB;
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06);
-  max-height: 320px;
+  max-height: 50vh;
   overflow-y: auto;
-  z-index: 100;
+  z-index: 1000;
 }
 
 .dropdown-header {
@@ -2151,11 +2268,10 @@ watch(() => props.simulationId, (newId) => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .survey-setup {
-  flex: 1;
   display: flex;
   flex-direction: column;
   padding: 24px;
@@ -2202,7 +2318,8 @@ watch(() => props.simulationId, (newId) => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 10px;
-  flex: 1;
+  min-height: 120px;
+  max-height: 240px;
   overflow-y: auto;
   padding: 4px;
   align-content: start;
@@ -2390,7 +2507,7 @@ watch(() => props.simulationId, (newId) => {
   to { transform: rotate(360deg); }
 }
 
-/* Survey Results */
+/* Results */
 .survey-results {
   flex: 1;
   overflow-y: auto;
@@ -2571,4 +2688,231 @@ watch(() => props.simulationId, (newId) => {
   border-top: 1px solid #E5E7EB;
   margin: 24px 0;
 }
+
+/* Profile Popup */
+.profile-popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.profile-popup {
+  background: #FFF;
+  width: 520px;
+  max-width: 90vw;
+  max-height: 80vh;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.profile-popup-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid #F0F0F0;
+  position: sticky;
+  top: 0;
+  background: #FFF;
+  z-index: 1;
+}
+
+.profile-popup-avatar {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  background: #1F2937;
+  color: #FFF;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.profile-popup-info { flex: 1; min-width: 0; }
+.profile-popup-name { font-size: 16px; font-weight: 600; color: #111; }
+.profile-popup-meta { font-size: 12px; color: #999; margin-top: 2px; }
+
+.profile-popup-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #999;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.profile-popup-close:hover { color: #333; }
+
+.profile-popup-details {
+  padding: 16px 24px;
+  border-bottom: 1px solid #F0F0F0;
+}
+
+.profile-popup-row {
+  margin-bottom: 10px;
+}
+
+.popup-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #999;
+  margin-bottom: 4px;
+}
+
+.popup-value {
+  font-size: 13px;
+  color: #444;
+  line-height: 1.5;
+}
+
+.popup-persona {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.popup-persona.clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.profile-popup-stats {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.popup-stat {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  background: #F5F5F5;
+  border-radius: 4px;
+  color: #555;
+}
+
+.profile-popup-activity {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px;
+}
+
+.popup-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #999;
+  margin-bottom: 12px;
+}
+
+.popup-loading, .popup-empty {
+  font-size: 12px;
+  color: #999;
+  text-align: center;
+  padding: 20px;
+}
+
+.popup-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.popup-action-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #F5F5F5;
+  font-size: 12px;
+}
+
+.popup-action-badge {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: #F0F0F0;
+  color: #666;
+  flex-shrink: 0;
+}
+
+.popup-action-badge.type-create_post, .popup-action-badge.type-quote_post { background: #E8F5E9; color: #2E7D32; }
+.popup-action-badge.type-like_post, .popup-action-badge.type-upvote_post { background: #FFF3E0; color: #E65100; }
+.popup-action-badge.type-create_comment { background: #E3F2FD; color: #1565C0; }
+.popup-action-badge.type-repost { background: #F3E5F5; color: #7B1FA2; }
+.popup-action-badge.type-follow { background: #E0F7FA; color: #00838F; }
+
+.popup-action-round {
+  font-size: 10px;
+  color: #BBB;
+  font-family: 'JetBrains Mono', monospace;
+  flex-shrink: 0;
+}
+
+.popup-action-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.popup-action-preview {
+  color: #444;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.popup-action-item { cursor: pointer; border-radius: 6px; padding: 6px 8px; }
+.popup-action-item:hover { background: #FAFAFA; }
+
+.popup-action-item.expanded .popup-action-preview { display: none; }
+.popup-action-item.expanded .popup-action-badge { display: none; }
+
+.popup-action-full {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #F9FAFB;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #333;
+  line-height: 1.6;
+}
+
+.popup-action-full p {
+  margin: 0 0 4px;
+}
+
+.popup-action-full p:last-child { margin-bottom: 0; }
+
+.clickable { cursor: pointer; }
+.clickable:hover { opacity: 0.8; }
+
+.modal-enter-active { transition: opacity 0.2s; }
+.modal-leave-active { transition: opacity 0.15s; }
+.modal-enter-from, .modal-leave-to { opacity: 0; }
 </style>

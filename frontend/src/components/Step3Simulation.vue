@@ -1,17 +1,17 @@
 <template>
   <div class="simulation-panel">
-    <!-- Top Control Bar -->
+    <!-- Top: Platform Status Row -->
     <div class="control-bar">
       <div class="status-group">
         <!-- Twitter Platform Progress -->
         <div class="platform-status twitter" :class="{ active: runStatus.twitter_running, completed: runStatus.twitter_completed }">
           <div class="platform-header">
-            <svg class="platform-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="platform-icon" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
             </svg>
             <span class="platform-name">Info Plaza</span>
             <span v-if="runStatus.twitter_completed" class="status-badge">
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3">
+              <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3">
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
             </span>
@@ -22,7 +22,7 @@
               <span class="stat-value mono">{{ runStatus.twitter_current_round || 0 }}<span class="stat-total">/{{ runStatus.total_rounds || maxRounds || '-' }}</span></span>
             </span>
             <span class="stat">
-              <span class="stat-label">Elapsed Time</span>
+              <span class="stat-label">Elapsed</span>
               <span class="stat-value mono">{{ twitterElapsedTime }}</span>
             </span>
             <span class="stat">
@@ -30,7 +30,6 @@
               <span class="stat-value mono">{{ runStatus.twitter_actions_count || 0 }}</span>
             </span>
           </div>
-          <!-- Available Actions Tooltip -->
           <div class="actions-tooltip">
             <div class="tooltip-title">Available Actions</div>
             <div class="tooltip-actions">
@@ -43,16 +42,16 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Reddit Platform Progress -->
         <div class="platform-status reddit" :class="{ active: runStatus.reddit_running, completed: runStatus.reddit_completed }">
           <div class="platform-header">
-            <svg class="platform-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="platform-icon" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
             </svg>
             <span class="platform-name">Topic Community</span>
             <span v-if="runStatus.reddit_completed" class="status-badge">
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3">
+              <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3">
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
             </span>
@@ -63,7 +62,7 @@
               <span class="stat-value mono">{{ runStatus.reddit_current_round || 0 }}<span class="stat-total">/{{ runStatus.total_rounds || maxRounds || '-' }}</span></span>
             </span>
             <span class="stat">
-              <span class="stat-label">Elapsed Time</span>
+              <span class="stat-label">Elapsed</span>
               <span class="stat-value mono">{{ redditElapsedTime }}</span>
             </span>
             <span class="stat">
@@ -71,7 +70,6 @@
               <span class="stat-value mono">{{ runStatus.reddit_actions_count || 0 }}</span>
             </span>
           </div>
-          <!-- Available Actions Tooltip -->
           <div class="actions-tooltip">
             <div class="tooltip-title">Available Actions</div>
             <div class="tooltip-actions">
@@ -89,22 +87,70 @@
           </div>
         </div>
       </div>
+    </div>
 
-      <div class="action-controls">
-        <button 
-          class="action-btn primary"
-          :disabled="phase !== 2 || isGeneratingReport"
-          @click="handleNextStep"
-        >
-          <span v-if="isGeneratingReport" class="loading-spinner-small"></span>
-          {{ isGeneratingReport ? 'Starting...' : 'Generate Results Report' }}
-          <span v-if="!isGeneratingReport" class="arrow-icon">→</span>
-        </button>
-      </div>
+    <!-- Actions Bar -->
+    <div class="actions-bar">
+      <!-- Back to Step 2 -->
+      <button
+        v-if="phase !== 1"
+        class="action-btn secondary"
+        @click="emit('go-back')"
+      >← Config</button>
+
+      <!-- Pause (while running) -->
+      <button
+        v-if="phase === 1"
+        class="action-btn danger"
+        :disabled="isStopping"
+        @click="handleStopSimulation"
+      >
+        <span v-if="isStopping" class="loading-spinner-small"></span>
+        {{ isStopping ? 'Pausing...' : 'Pause' }}
+      </button>
+
+      <!-- Restart from scratch -->
+      <button
+        v-if="phase === 2"
+        class="action-btn secondary"
+        :disabled="isStarting"
+        @click="handleRestart"
+      >
+        Restart
+      </button>
+
+      <!-- Resume (when paused/stopped/failed with partial data) -->
+      <button
+        v-if="phase === 2 && hasPartialData"
+        class="action-btn secondary"
+        :disabled="isStarting"
+        @click="handleResume"
+      >
+        <span v-if="isStarting" class="loading-spinner-small"></span>
+        {{ isStarting ? 'Resuming...' : 'Resume' }}
+      </button>
+
+      <!-- Skip to Report / Generate Report -->
+      <button
+        class="action-btn primary"
+        :disabled="!canGenerateReport || isGeneratingReport"
+        @click="handleNextStep"
+      >
+        <span v-if="isGeneratingReport" class="loading-spinner-small"></span>
+        <template v-if="isGeneratingReport">Starting...</template>
+        <template v-else-if="phase === 1">Skip to Report ⟶</template>
+        <template v-else>Report →</template>
+      </button>
     </div>
 
     <!-- Main Content: Dual Timeline -->
-    <div class="main-content-area" ref="scrollContainer">
+    <div class="main-content-area" ref="scrollContainer" @scroll="onTimelineScroll">
+      <!-- Scroll to bottom button -->
+      <button
+        v-if="showScrollBtn"
+        class="scroll-bottom-btn"
+        @click="scrollToBottom"
+      >↓</button>
       <!-- Timeline Header -->
       <div class="timeline-header" v-if="allActions.length > 0">
         <div class="timeline-stats">
@@ -123,12 +169,22 @@
         </div>
       </div>
       
+      <!-- Agent Filter Bar -->
+      <div v-if="filteredAgent" class="agent-filter-bar">
+        <div class="filter-info">
+          <div class="avatar-placeholder">{{ filteredAgent[0] }}</div>
+          <span class="filter-name">{{ filteredAgent }}</span>
+          <span class="filter-count">{{ chronologicalActions.length }} events</span>
+        </div>
+        <button class="filter-clear" @click="clearAgentFilter">Clear</button>
+      </div>
+
       <!-- Timeline Feed -->
       <div class="timeline-feed">
         <div class="timeline-axis"></div>
-        
+
         <TransitionGroup name="timeline-item">
-          <div 
+          <div
             v-for="action in chronologicalActions" 
             :key="action._uniqueId || action.id || `${action.timestamp}-${action.agent_id}`" 
             class="timeline-item"
@@ -140,7 +196,7 @@
             
             <div class="timeline-card">
               <div class="card-header">
-                <div class="agent-info">
+                <div class="agent-info clickable" @click="filterByAgent(action.agent_name)">
                   <div class="avatar-placeholder">{{ (action.agent_name || 'A')[0] }}</div>
                   <span class="agent-name">{{ action.agent_name }}</span>
                 </div>
@@ -224,7 +280,7 @@
                 <template v-if="action.action_type === 'FOLLOW'">
                   <div class="follow-info">
                     <svg class="icon-small" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
-                    <span class="follow-label">Followed @{{ action.action_args?.target_user || action.action_args?.user_id || 'User' }}</span>
+                    <span class="follow-label">Followed @{{ action.action_args?.target_user_name || action.action_args?.target_user || action.action_args?.user_id || 'User' }}</span>
                   </div>
                 </template>
 
@@ -270,12 +326,12 @@
     </div>
 
     <!-- Bottom Info / Logs -->
-    <div class="system-logs">
-      <div class="log-header">
-        <span class="log-title">SIMULATION MONITOR</span>
-        <span class="log-id">{{ simulationId || 'NO_SIMULATION' }}</span>
+    <div class="system-logs" :class="{ collapsed: monitorCollapsed }">
+      <div class="log-header" @click="monitorCollapsed = !monitorCollapsed">
+        <span class="log-title">SIMULATION MONITOR <span class="log-toggle">{{ monitorCollapsed ? '▲' : '▼' }}</span></span>
+        <span class="log-id copyable" @click.stop="copySimId" :title="copied ? 'Copied!' : 'Click to copy'">{{ simulationId || 'NO_SIMULATION' }}{{ copied ? ' ✓' : '' }}</span>
       </div>
-      <div class="log-content" ref="logContent">
+      <div v-show="!monitorCollapsed" class="log-content" ref="logContent">
         <div class="log-line" v-for="(log, idx) in systemLogs" :key="idx">
           <span class="log-time">{{ log.time }}</span>
           <span class="log-msg">{{ log.msg }}</span>
@@ -288,10 +344,11 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { 
-  startSimulation, 
+import {
+  startSimulation,
   stopSimulation,
-  getRunStatus, 
+  resumeSimulation,
+  getRunStatus,
   getRunStatusDetail
 } from '../api/simulation'
 import { generateReport } from '../api/report'
@@ -322,10 +379,43 @@ const runStatus = ref({})
 const allActions = ref([]) // All actions (incremental accumulation)
 const actionIds = ref(new Set()) // Action ID set for deduplication
 const scrollContainer = ref(null)
+const showScrollBtn = ref(false)
+const copied = ref(false)
+const monitorCollapsed = ref(false)
+const filteredAgent = ref(null)
+
+const filterByAgent = (agentName) => {
+  filteredAgent.value = filteredAgent.value === agentName ? null : agentName
+}
+
+const clearAgentFilter = () => {
+  filteredAgent.value = null
+}
+
+const copySimId = () => {
+  if (!props.simulationId) return
+  navigator.clipboard.writeText(props.simulationId)
+  copied.value = true
+  setTimeout(() => { copied.value = false }, 1500)
+}
+
+const onTimelineScroll = () => {
+  const el = scrollContainer.value
+  if (!el) return
+  showScrollBtn.value = el.scrollTop + el.clientHeight < el.scrollHeight - 100
+}
+
+const scrollToBottom = () => {
+  const el = scrollContainer.value
+  if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+}
 
 // Computed
 // Display actions in chronological order (latest at bottom)
 const chronologicalActions = computed(() => {
+  if (filteredAgent.value) {
+    return allActions.value.filter(a => a.agent_name === filteredAgent.value)
+  }
   return allActions.value
 })
 
@@ -338,12 +428,31 @@ const redditActionsCount = computed(() => {
   return allActions.value.filter(a => a.platform === 'reddit').length
 })
 
+// Has partial data (not fully completed) — show Resume button
+const hasPartialData = computed(() => {
+  const currentRound = runStatus.value.current_round || 0
+  const totalRounds = runStatus.value.total_rounds || 0
+  return currentRound > 0 && currentRound < totalRounds
+})
+
+// Can generate report: simulation completed, stopped, failed with data, or currently running with data
+const canGenerateReport = computed(() => {
+  if (phase.value === 2) return true  // completed/stopped
+  if (phase.value === 1) {
+    // Allow skip-to-report if we have some actions
+    const totalActions = (runStatus.value.twitter_actions_count || 0) + (runStatus.value.reddit_actions_count || 0)
+    return totalActions > 0
+  }
+  return false
+})
+
 // Format simulated elapsed time (calculated from rounds and minutes per round)
 const formatElapsedTime = (currentRound) => {
-  if (!currentRound || currentRound <= 0) return '0h 0m'
+  if (!currentRound || currentRound <= 0) return '0h'
   const totalMinutes = currentRound * props.minutesPerRound
   const hours = Math.floor(totalMinutes / 60)
   const minutes = totalMinutes % 60
+  if (minutes === 0) return `${hours}h`
   return `${hours}h ${minutes}m`
 }
 
@@ -432,6 +541,59 @@ const doStartSimulation = async () => {
   } finally {
     isStarting.value = false
   }
+}
+
+// Resume simulation from last completed round
+const handleResume = async () => {
+  if (!props.simulationId) return
+
+  const fromRound = runStatus.value.current_round || 0
+  addLog(`Resuming simulation from round ${fromRound}...`)
+
+  isStarting.value = true
+  startError.value = null
+  emit('update-status', 'processing')
+
+  try {
+    const params = {
+      simulation_id: props.simulationId,
+      platform: 'parallel',
+      enable_graph_memory_update: true
+    }
+
+    if (props.maxRounds) {
+      params.max_rounds = props.maxRounds
+    }
+
+    const res = await resumeSimulation(params)
+
+    if (res.success && res.data) {
+      addLog(`Resumed from round ${res.data.resumed_from_round || fromRound}`)
+      addLog(`  ├─ PID: ${res.data.process_pid || '-'}`)
+      phase.value = 1
+      runStatus.value = { ...runStatus.value, ...res.data }
+      startStatusPolling()
+      startDetailPolling()
+    } else {
+      startError.value = res.error || 'Resume failed'
+      addLog(`Resume failed: ${res.error || 'Unknown error'}`)
+      emit('update-status', 'error')
+    }
+  } catch (err) {
+    startError.value = err.message
+    addLog(`Resume error: ${err.message}`)
+    emit('update-status', 'error')
+  } finally {
+    isStarting.value = false
+  }
+}
+
+// Restart simulation (force restart from scratch)
+const handleRestart = async () => {
+  if (!props.simulationId) return
+  addLog('Restarting simulation from scratch...')
+  resetAllState()
+  doStartSimulation()
 }
 
 // Stop simulation
@@ -650,19 +812,38 @@ const handleNextStep = async () => {
   }
 
   isGeneratingReport.value = true
-  addLog('Starting report generation...')
-  
+
+  // If simulation is still running, stop it first
+  if (phase.value === 1) {
+    addLog('Stopping simulation before generating report...')
+    try {
+      await stopSimulation({ simulation_id: props.simulationId })
+      phase.value = 2
+      stopPolling()
+      addLog('Simulation stopped — proceeding with partial data')
+      emit('update-status', 'completed')
+    } catch (err) {
+      addLog(`Warning: could not stop simulation (${err.message}), proceeding anyway`)
+      stopPolling()
+      phase.value = 2
+    }
+  }
+
   try {
+    // First try to get existing report (don't regenerate)
+    addLog('Checking for existing report...')
     const res = await generateReport({
       simulation_id: props.simulationId,
-      force_regenerate: true
+      force_regenerate: false
     })
-    
+
     if (res.success && res.data) {
       const reportId = res.data.report_id
-      addLog(`Report generation task started: ${reportId}`)
-
-      // Navigate to report page
+      if (res.data.already_generated) {
+        addLog(`Found existing report: ${reportId}`)
+      } else {
+        addLog(`Report generation started: ${reportId}`)
+      }
       router.push({ name: 'Report', params: { reportId } })
     } else {
       addLog(`Failed to start report generation: ${res.error || 'Unknown error'}`)
@@ -684,11 +865,65 @@ watch(() => props.systemLogs?.length, () => {
   })
 })
 
+// Resume: check for existing run state before starting fresh
+const tryResumeOrStart = async () => {
+  if (!props.simulationId) return
+
+  try {
+    const res = await getRunStatus(props.simulationId)
+
+    if (res.success && res.data) {
+      const status = res.data.runner_status
+
+      if (status === 'running' || status === 'starting') {
+        // Simulation is still running — reconnect to it
+        addLog(`Reconnecting to running simulation (round ${res.data.current_round}/${res.data.total_rounds})...`)
+        runStatus.value = res.data
+        phase.value = 1
+        emit('update-status', 'processing')
+        startStatusPolling()
+        startDetailPolling()
+        return
+      }
+
+      if (status === 'completed' || status === 'stopped') {
+        // Already finished — show completed state
+        const totalActions = (res.data.twitter_actions_count || 0) + (res.data.reddit_actions_count || 0)
+        addLog(`Previous simulation found: ${status} (${totalActions} actions, round ${res.data.current_round}/${res.data.total_rounds})`)
+        runStatus.value = res.data
+        phase.value = 2
+        emit('update-status', 'completed')
+        // Load actions for display
+        fetchRunStatusDetail()
+        return
+      }
+
+      if (status === 'failed') {
+        // Crashed — show partial data, let user decide
+        const totalActions = (res.data.twitter_actions_count || 0) + (res.data.reddit_actions_count || 0)
+        if (totalActions > 0) {
+          addLog(`Previous simulation crashed at round ${res.data.current_round}/${res.data.total_rounds} with ${totalActions} actions`)
+          addLog('You can generate a report from partial data or restart')
+          runStatus.value = res.data
+          phase.value = 2  // treat as completed so buttons work
+          emit('update-status', 'completed')
+          fetchRunStatusDetail()
+          return
+        }
+        // No data — just start fresh
+        addLog('Previous simulation failed with no data — starting fresh')
+      }
+    }
+  } catch (err) {
+    // No existing state — that's fine, start fresh
+  }
+
+  doStartSimulation()
+}
+
 onMounted(() => {
   addLog('Step3 Simulation Run initialized')
-  if (props.simulationId) {
-    doStartSimulation()
-  }
+  tryResumeOrStart()
 })
 
 onUnmounted(() => {
@@ -702,39 +937,49 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background: #FFFFFF;
-  font-family: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
   overflow: hidden;
 }
 
-/* --- Control Bar --- */
+/* --- Control Bar (platforms only) --- */
 .control-bar {
   background: #FFF;
-  padding: 12px 24px;
+  padding: 6px 16px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #EAEAEA;
+  border-bottom: 1px solid #F0F0F0;
   z-index: 10;
-  height: 64px;
+  min-height: 44px;
+}
+
+/* --- Actions Bar (buttons) --- */
+.actions-bar {
+  background: #FAFAFA;
+  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-bottom: 1px solid #EAEAEA;
 }
 
 .status-group {
   display: flex;
-  gap: 12px;
+  gap: 8px;
 }
 
 /* Platform Status Cards */
 .platform-status {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 6px 12px;
-  border-radius: 4px;
+  gap: 2px;
+  padding: 4px 8px;
+  border-radius: 3px;
   background: #FAFAFA;
   border: 1px solid #EAEAEA;
   opacity: 0.7;
   transition: all 0.3s;
-  min-width: 140px;
+  min-width: 110px;
   position: relative;
   cursor: pointer;
 }
@@ -815,16 +1060,16 @@ onUnmounted(() => {
 .platform-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 2px;
+  gap: 5px;
+  margin-bottom: 1px;
 }
 
 .platform-name {
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 700;
   color: #000;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
 }
 
 .platform-status.twitter .platform-icon { color: #000; }
@@ -832,31 +1077,31 @@ onUnmounted(() => {
 
 .platform-stats {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .stat {
   display: flex;
   align-items: baseline;
-  gap: 3px;
+  gap: 2px;
 }
 
 .stat-label {
-  font-size: 8px;
+  font-size: 7px;
   color: #999;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
 }
 
 .stat-value {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: #333;
 }
 
 .stat-total, .stat-unit {
-  font-size: 9px;
+  font-size: 8px;
   color: #999;
   font-weight: 400;
 }
@@ -869,19 +1114,29 @@ onUnmounted(() => {
 }
 
 /* Action Button */
+/* kept for backwards compat */
+.action-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  font-size: 13px;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 12px;
+  min-width: 100px;
+  font-size: 10px;
   font-weight: 600;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
   transition: all 0.2s ease;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .action-btn.primary {
@@ -891,6 +1146,26 @@ onUnmounted(() => {
 
 .action-btn.primary:hover:not(:disabled) {
   background: #333;
+}
+
+.action-btn.secondary {
+  background: #FFF;
+  color: #333;
+  border: 1px solid #DDD;
+}
+
+.action-btn.secondary:hover:not(:disabled) {
+  background: #F5F5F5;
+  border-color: #BBB;
+}
+
+.action-btn.danger {
+  background: #DC2626;
+  color: #FFF;
+}
+
+.action-btn.danger:hover:not(:disabled) {
+  background: #B91C1C;
 }
 
 .action-btn:disabled {
@@ -904,6 +1179,86 @@ onUnmounted(() => {
   overflow-y: auto;
   position: relative;
   background: #FFF;
+}
+
+.agent-info.clickable {
+  cursor: pointer;
+}
+
+.agent-info.clickable:hover .agent-name {
+  text-decoration: underline;
+}
+
+.agent-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  margin: 0 16px 8px;
+  background: #F5F5F5;
+  border: 1px solid #E0E0E0;
+  border-radius: 4px;
+}
+
+.filter-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+}
+
+.filter-count {
+  font-size: 10px;
+  color: #999;
+}
+
+.filter-clear {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border: 1px solid #DDD;
+  border-radius: 3px;
+  background: #FFF;
+  color: #666;
+  cursor: pointer;
+}
+
+.filter-clear:hover {
+  background: #F0F0F0;
+  border-color: #BBB;
+}
+
+.scroll-bottom-btn {
+  position: sticky;
+  top: 8px;
+  float: right;
+  margin-right: 12px;
+  z-index: 20;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #DDD;
+  background: #FFF;
+  color: #333;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  transition: all 0.2s;
+}
+
+.scroll-bottom-btn:hover {
+  background: #F5F5F5;
+  border-color: #BBB;
 }
 
 /* Timeline Header */
@@ -1062,6 +1417,9 @@ onUnmounted(() => {
 .avatar-placeholder {
   width: 24px;
   height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  flex-shrink: 0;
   background: #000;
   color: #FFF;
   border-radius: 50%;
@@ -1225,6 +1583,30 @@ onUnmounted(() => {
   margin-bottom: 8px;
   font-size: 10px;
   color: #666;
+  cursor: pointer;
+  user-select: none;
+}
+
+.system-logs.collapsed .log-header {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+.log-toggle {
+  font-size: 8px;
+  opacity: 0.5;
+  margin-left: 4px;
+}
+
+.log-id.copyable {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+.log-id.copyable:hover {
+  color: #FFF;
 }
 
 .log-content {

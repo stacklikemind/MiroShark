@@ -156,27 +156,41 @@
         </div>
 
         <div class="card-content">
-          <p class="api-note">POST /api/simulation/create</p>
-          <p class="description">Graph build is complete. Please proceed to the next step for simulation environment setup.</p>
+          <p class="description">Graph build is complete. Please proceed to the next step for simulation agent setup.</p>
+
+          <!-- Existing simulations -->
+          <div v-if="existingSimulations.length > 0" class="existing-sims">
+            <div
+              v-for="sim in existingSimulations"
+              :key="sim.simulation_id"
+              class="sim-entry"
+              @click="resumeSimulation(sim.simulation_id)"
+            >
+              <span class="sim-id mono">{{ sim.simulation_id }}</span>
+              <span class="sim-status" :class="sim.status">{{ sim.status }}</span>
+              <span class="sim-arrow">→</span>
+            </div>
+          </div>
+
           <button
             class="action-btn"
             :disabled="currentPhase < 2 || creatingSimulation"
             @click="handleEnterEnvSetup"
           >
             <span v-if="creatingSimulation" class="spinner-sm"></span>
-            {{ creatingSimulation ? 'Creating...' : 'Enter Environment Setup ➝' }}
+            {{ creatingSimulation ? 'Creating...' : (existingSimulations.length > 0 ? 'New Simulation ➝' : 'Enter Agent Setup ➝') }}
           </button>
         </div>
       </div>
     </div>
 
     <!-- Bottom Info / Logs -->
-    <div class="system-logs">
-      <div class="log-header">
-        <span class="log-title">SYSTEM DASHBOARD</span>
+    <div class="system-logs" :class="{ collapsed: dashboardCollapsed }">
+      <div class="log-header" @click="dashboardCollapsed = !dashboardCollapsed">
+        <span class="log-title">SYSTEM DASHBOARD <span class="log-toggle">{{ dashboardCollapsed ? '▲' : '▼' }}</span></span>
         <span class="log-id">{{ projectData?.project_id || 'NO_PROJECT' }}</span>
       </div>
-      <div class="log-content" ref="logContent">
+      <div v-show="!dashboardCollapsed" class="log-content" ref="logContent">
         <div class="log-line" v-for="(log, idx) in systemLogs" :key="idx">
           <span class="log-time">{{ log.time }}</span>
           <span class="log-msg">{{ log.msg }}</span>
@@ -187,9 +201,9 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { createSimulation } from '../api/simulation'
+import { createSimulation, listSimulations } from '../api/simulation'
 
 const router = useRouter()
 
@@ -206,9 +220,31 @@ defineEmits(['next-step'])
 
 const selectedOntologyItem = ref(null)
 const logContent = ref(null)
+const dashboardCollapsed = ref(false)
 const creatingSimulation = ref(false)
+const existingSimulations = ref([])
 
-// Enter environment setup - create simulation and navigate
+// Check for existing simulations for this project
+const loadExistingSimulations = async () => {
+  if (!props.projectData?.project_id) return
+  try {
+    const res = await listSimulations(props.projectData.project_id)
+    if (res.success && res.data) {
+      existingSimulations.value = res.data
+    }
+  } catch (err) {
+    // silent
+  }
+}
+
+onMounted(loadExistingSimulations)
+watch(() => props.projectData?.project_id, loadExistingSimulations)
+
+const resumeSimulation = (simId) => {
+  router.push({ name: 'Simulation', params: { simulationId: simId } })
+}
+
+// Enter agent setup - create simulation and navigate
 const handleEnterEnvSetup = async () => {
   if (!props.projectData?.project_id || !props.projectData?.graph_id) {
     console.error('Missing project or graph information')
@@ -621,6 +657,57 @@ watch(() => props.systemLogs.length, () => {
   cursor: not-allowed;
 }
 
+.existing-sims {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.sim-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #E0E0E0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 11px;
+}
+
+.sim-entry:hover {
+  background: #F5F5F5;
+  border-color: #333;
+}
+
+.sim-id {
+  flex: 1;
+  color: #333;
+  font-weight: 500;
+}
+
+.sim-status {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: #F0F0F0;
+  color: #666;
+}
+
+.sim-status.ready, .sim-status.completed { color: #1A936F; background: #E8F5E9; }
+.sim-status.running { color: #E65100; background: #FFF3E0; }
+.sim-status.failed { color: #C62828; background: #FFEBEE; }
+.sim-status.paused, .sim-status.stopped { color: #F57F17; background: #FFFDE7; }
+
+.sim-arrow {
+  color: #999;
+  font-size: 12px;
+}
+
 .progress-section {
   display: flex;
   align-items: center;
@@ -659,6 +746,20 @@ watch(() => props.systemLogs.length, () => {
   margin-bottom: 8px;
   font-size: 10px;
   color: #888;
+  cursor: pointer;
+  user-select: none;
+}
+
+.system-logs.collapsed .log-header {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+.log-toggle {
+  font-size: 8px;
+  opacity: 0.5;
+  margin-left: 4px;
 }
 
 .log-content {

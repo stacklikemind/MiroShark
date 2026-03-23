@@ -778,7 +778,7 @@ Important:
         else:
             # Default persona
             return {
-                "bio": entity_summary[:150] if entity_summary else f"{entity_type}: {entity_name}",
+                "bio": entity_summary[:500] if entity_summary else f"{entity_type}: {entity_name}",
                 "persona": entity_summary or f"{entity_name} is a {entity_type.lower()} participating in social discussions.",
                 "age": random.randint(25, 50),
                 "gender": random.choice(["male", "female"]),
@@ -1103,7 +1103,7 @@ Important:
                 "user_id": profile.user_id if profile.user_id is not None else idx,  # Critical: must include user_id
                 "username": profile.user_name,
                 "name": profile.name,
-                "bio": profile.bio[:150] if profile.bio else f"{profile.name}",
+                "bio": profile.bio[:500] if profile.bio else f"{profile.name}",
                 "persona": profile.persona or f"{profile.name} is a participant in social discussions.",
                 "karma": profile.karma if profile.karma else 1000,
                 "created_at": profile.created_at,

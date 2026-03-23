@@ -316,7 +316,9 @@ class SimulationRunner:
         max_rounds: int = None,  # Max simulation rounds (optional, to truncate overly long simulations)
         enable_graph_memory_update: bool = False,  # Whether to update activities to knowledge graph
         graph_id: str = None,  # Graph ID (required when graph update is enabled)
-        storage: 'GraphStorage' = None  # GraphStorage instance (required if enable_graph_memory_update)
+        storage: 'GraphStorage' = None,  # GraphStorage instance (required if enable_graph_memory_update)
+        start_round: int = 0,  # Resume from this round (0 = start fresh)
+        env_only: bool = False  # Just load environments for interviews, no simulation
     ) -> SimulationRunState:
         """
         Start simulation
@@ -424,10 +426,19 @@ class SimulationRunner:
             # If max rounds specified, add to command line args
             if max_rounds is not None and max_rounds > 0:
                 cmd.extend(["--max-rounds", str(max_rounds)])
-            
-            # Create main log file to prevent process blocking from full stdout/stderr pipe buffers
+
+            # If resuming, pass start round
+            if start_round > 0:
+                cmd.extend(["--start-round", str(start_round)])
+
+            # If env-only mode (for interviews without simulation)
+            if env_only:
+                cmd.append("--env-only")
+
+            # Create main log file (append if resuming, truncate if fresh)
             main_log_path = os.path.join(sim_dir, "simulation.log")
-            main_log_file = open(main_log_path, 'w', encoding='utf-8')
+            log_mode = 'a' if start_round > 0 else 'w'
+            main_log_file = open(main_log_path, log_mode, encoding='utf-8')
             
             # Set subprocess environment variables to ensure UTF-8 encoding on Windows
             # This fixes issues where third-party libraries (e.g. OASIS) read files without specifying encoding
@@ -492,9 +503,15 @@ class SimulationRunner:
         if not process or not state:
             return
         
+        # If resuming, skip past existing log content to avoid re-reading
+        # old simulation_end events that would falsely mark the sim as completed
         twitter_position = 0
         reddit_position = 0
-        
+        if os.path.exists(twitter_actions_log):
+            twitter_position = os.path.getsize(twitter_actions_log)
+        if os.path.exists(reddit_actions_log):
+            reddit_position = os.path.getsize(reddit_actions_log)
+
         try:
             while process.poll() is None:  # Process still running
                 # Read Twitter action logs

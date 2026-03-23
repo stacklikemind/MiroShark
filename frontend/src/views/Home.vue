@@ -16,7 +16,6 @@
         <div class="hero-left">
           <div class="tag-row">
             <span class="orange-tag">A Concise & Universal Swarm Intelligence Engine</span>
-            <span class="version-text">/ v0.1-Preview</span>
           </div>
           
           <h1 class="main-title">
@@ -89,7 +88,7 @@
               <div class="workflow-item">
                 <span class="step-num">02</span>
                 <div class="step-info">
-                  <div class="step-title">Environment Setup</div>
+                  <div class="step-title">Agent Setup</div>
                   <div class="step-desc">Entity-relation extraction & Persona generation & Environment config Agent injects simulation parameters</div>
                 </div>
               </div>
@@ -191,7 +190,7 @@
                 @click="startSimulation"
                 :disabled="!canSubmit || loading"
               >
-                <span v-if="!loading">Launch Engine</span>
+                <span v-if="!loading">Launch Simulation</span>
                 <span v-else>Initializing...</span>
                 <span class="btn-arrow">→</span>
               </button>
@@ -324,8 +323,8 @@ const startSimulation = () => {
     Make sure these Google Fonts are imported in index.html
   */
   --font-mono: 'JetBrains Mono', monospace;
-  --font-sans: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif;
-  --font-cn: 'Noto Sans SC', system-ui, sans-serif;
+  --font-sans: 'Space Grotesk', system-ui, sans-serif;
+
 }
 
 .home-container {

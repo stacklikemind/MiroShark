@@ -9,7 +9,7 @@
           <div class="report-header-block">
             <div class="report-meta">
               <span class="report-tag">Prediction Report</span>
-              <span class="report-id">ID: {{ reportId || 'REF-2024-X92' }}</span>
+              <span class="report-id copyable" @click="copyReportId">ID: {{ reportId || 'REF-2024-X92' }}</span>
             </div>
             <h1 class="main-title">{{ reportOutline.title }}</h1>
             <p class="sub-title">{{ reportOutline.summary }}</p>
@@ -375,12 +375,12 @@
     </div>
 
     <!-- Bottom Console Logs -->
-    <div class="console-logs">
-      <div class="log-header">
-        <span class="log-title">CONSOLE OUTPUT</span>
+    <div class="console-logs" :class="{ collapsed: consoleCollapsed }">
+      <div class="log-header" @click="consoleCollapsed = !consoleCollapsed">
+        <span class="log-title">CONSOLE OUTPUT <span class="log-toggle">{{ consoleCollapsed ? '▲' : '▼' }}</span></span>
         <span class="log-id">{{ reportId || 'NO_REPORT' }}</span>
       </div>
-      <div class="log-content" ref="logContent">
+      <div v-show="!consoleCollapsed" class="log-content" ref="logContent">
         <div class="log-line" v-for="(log, idx) in consoleLogs" :key="idx">
           <span class="log-msg" :class="getLogLevelClass(log)">{{ log }}</span>
         </div>
@@ -403,6 +403,12 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['add-log', 'update-status'])
+
+const consoleCollapsed = ref(false)
+
+const copyReportId = () => {
+  if (props.reportId) navigator.clipboard.writeText(props.reportId)
+}
 
 // Navigation
 const goToInteraction = () => {
@@ -551,31 +557,31 @@ const parseInsightForge = (text) => {
   }
   
   try {
-    // Extract analysis question
-    const queryMatch = text.match(/Analysis question:\s*(.+?)(?:\n|$)/)
+    // Extract analysis question (match both formats)
+    const queryMatch = text.match(/Analysis\s*(?:question|Query):\s*(.+?)(?:\n|$)/i)
     if (queryMatch) result.query = queryMatch[1].trim()
 
     // Extract prediction scenario
-    const reqMatch = text.match(/Prediction scenario:\s*(.+?)(?:\n|$)/)
+    const reqMatch = text.match(/Prediction\s*(?:scenario|Scenario):\s*(.+?)(?:\n|$)/i)
     if (reqMatch) result.simulationRequirement = reqMatch[1].trim()
 
-    // Extract statistics
-    const factMatch = text.match(/Relevant prediction facts:\s*(\d+)/)
-    const entityMatch = text.match(/Entities involved:\s*(\d+)/)
-    const relMatch = text.match(/Relationship chains:\s*(\d+)/)
+    // Extract statistics (match both formats)
+    const factMatch = text.match(/(?:Relevant|Related)\s*(?:prediction\s*)?Facts?:\s*(\d+)/i)
+    const entityMatch = text.match(/(?:Entities?\s*involved|Involved\s*Entities?):\s*(\d+)/i)
+    const relMatch = text.match(/Relationship\s*(?:chains?|Chains?):\s*(\d+)/i)
     if (factMatch) result.stats.facts = parseInt(factMatch[1])
     if (entityMatch) result.stats.entities = parseInt(entityMatch[1])
     if (relMatch) result.stats.relationships = parseInt(relMatch[1])
-    
-    // Extract sub-questions - extract all, no limit
-    const subQSection = text.match(/### Analyzed Sub-Questions\n([\s\S]*?)(?=\n###|$)/)
+
+    // Extract sub-questions
+    const subQSection = text.match(/###\s*(?:Analyzed|Analysis)\s*Sub-Questions\n([\s\S]*?)(?=\n###|$)/)
     if (subQSection) {
       const lines = subQSection[1].split('\n').filter(l => l.match(/^\d+\./))
       result.subQueries = lines.map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean)
     }
-    
-    // Extract key facts - extract all, no limit
-    const factsSection = text.match(/### \[Key Facts\][\s\S]*?\n([\s\S]*?)(?=\n###|$)/)
+
+    // Extract key facts
+    const factsSection = text.match(/###\s*(?:\[Key Facts\]|Key Facts[^\n]*)\n([\s\S]*?)(?=\n###|$)/)
     if (factsSection) {
       const lines = factsSection[1].split('\n').filter(l => l.match(/^\d+\./))
       result.facts = lines.map(l => {
@@ -583,9 +589,9 @@ const parseInsightForge = (text) => {
         return match ? match[1].replace(/^"|"$/g, '').trim() : l.replace(/^\d+\.\s*/, '').trim()
       }).filter(Boolean)
     }
-    
-    // Extract core entities - extract all, including summary and related facts count
-    const entitySection = text.match(/### \[Core Entities\]\n([\s\S]*?)(?=\n###|$)/)
+
+    // Extract core entities
+    const entitySection = text.match(/###\s*(?:\[Core Entities\]|Core Entities)\n([\s\S]*?)(?=\n###|$)/)
     if (entitySection) {
       const entityText = entitySection[1]
       // Split entity blocks by "- **"
@@ -604,7 +610,7 @@ const parseInsightForge = (text) => {
     }
     
     // Extract relationship chains - extract all, no limit
-    const relSection = text.match(/### \[Relationship Chains\]\n([\s\S]*?)(?=\n###|$)/)
+    const relSection = text.match(/###\s*(?:\[Relationship Chains\]|Relationship Chains)\n([\s\S]*?)(?=\n###|$)/)
     if (relSection) {
       const lines = relSection[1].split('\n').filter(l => l.trim().startsWith('-'))
       result.relations = lines.map(l => {
@@ -636,29 +642,28 @@ const parsePanorama = (text) => {
     const queryMatch = text.match(/Query:\s*(.+?)(?:\n|$)/)
     if (queryMatch) result.query = queryMatch[1].trim()
 
-    // Extract statistics
-    const nodesMatch = text.match(/Total nodes:\s*(\d+)/)
-    const edgesMatch = text.match(/Total edges:\s*(\d+)/)
-    const activeMatch = text.match(/Currently active facts:\s*(\d+)/)
-    const histMatch = text.match(/Historical\/expired facts:\s*(\d+)/)
+    // Extract statistics (case-insensitive to match backend output)
+    const nodesMatch = text.match(/Total\s*Nodes?:\s*(\d+)/i)
+    const edgesMatch = text.match(/Total\s*Edges?:\s*(\d+)/i)
+    const activeMatch = text.match(/(?:Current(?:ly)?|Valid)\s*(?:Valid\s*)?Facts?:\s*(\d+)/i)
+    const histMatch = text.match(/Historical.*?Facts?:\s*(\d+)/i)
     if (nodesMatch) result.stats.nodes = parseInt(nodesMatch[1])
     if (edgesMatch) result.stats.edges = parseInt(edgesMatch[1])
     if (activeMatch) result.stats.activeFacts = parseInt(activeMatch[1])
     if (histMatch) result.stats.historicalFacts = parseInt(histMatch[1])
-    
-    // Extract current valid facts - extract all, no limit
-    const activeSection = text.match(/### \[Currently Active Facts\][\s\S]*?\n([\s\S]*?)(?=\n###|$)/)
+
+    // Extract current valid facts - match both old and new header formats
+    const activeSection = text.match(/###\s*(?:\[Currently Active Facts\]|Current Valid Facts[^\n]*)\n([\s\S]*?)(?=\n###|$)/)
     if (activeSection) {
       const lines = activeSection[1].split('\n').filter(l => l.match(/^\d+\./))
       result.activeFacts = lines.map(l => {
-        // Remove numbering and quotes
         const factText = l.replace(/^\d+\.\s*/, '').replace(/^"|"$/g, '').trim()
         return factText
       }).filter(Boolean)
     }
-    
-    // Extract historical/expired facts - extract all, no limit
-    const histSection = text.match(/### \[Historical\/Expired Facts\][\s\S]*?\n([\s\S]*?)(?=\n###|$)/)
+
+    // Extract historical/expired facts
+    const histSection = text.match(/###\s*(?:\[Historical\/Expired Facts\]|Historical\/Expired Facts[^\n]*)\n([\s\S]*?)(?=\n###|$)/)
     if (histSection) {
       const lines = histSection[1].split('\n').filter(l => l.match(/^\d+\./))
       result.historicalFacts = lines.map(l => {
@@ -666,9 +671,9 @@ const parsePanorama = (text) => {
         return factText
       }).filter(Boolean)
     }
-    
-    // Extract involved entities - extract all, no limit
-    const entitySection = text.match(/### \[Involved Entities\]\n([\s\S]*?)(?=\n###|$)/)
+
+    // Extract involved entities
+    const entitySection = text.match(/###\s*(?:\[Involved Entities\]|Involved Entities)\n([\s\S]*?)(?=\n###|$)/)
     if (entitySection) {
       const lines = entitySection[1].split('\n').filter(l => l.trim().startsWith('-'))
       result.entities = lines.map(l => {
@@ -910,15 +915,15 @@ const parseQuickSearch = (text) => {
   
   try {
     // Extract search query
-    const queryMatch = text.match(/Search query:\s*(.+?)(?:\n|$)/)
+    const queryMatch = text.match(/Search\s*Query:\s*(.+?)(?:\n|$)/i)
     if (queryMatch) result.query = queryMatch[1].trim()
 
     // Extract result count
-    const countMatch = text.match(/Found\s*(\d+)\s*relevant/)
+    const countMatch = text.match(/Found\s*(\d+)\s*(?:relevant|related)/i)
     if (countMatch) result.count = parseInt(countMatch[1])
 
     // Extract related facts - extract all, no limit
-    const factsSection = text.match(/### Relevant facts:\n([\s\S]*)$/)
+    const factsSection = text.match(/###\s*(?:Relevant|Related)\s*[Ff]acts:?\n([\s\S]*)$/)
     if (factsSection) {
       const lines = factsSection[1].split('\n').filter(l => l.match(/^\d+\./))
       result.facts = lines.map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean)
@@ -2208,7 +2213,7 @@ watch(() => props.reportId, (newId) => {
   display: flex;
   flex-direction: column;
   background: #F8F9FA;
-  font-family: 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   overflow: hidden;
 }
 
@@ -2384,8 +2389,21 @@ watch(() => props.reportId, (newId) => {
   letter-spacing: 0.02em;
 }
 
+.report-id.copyable {
+  cursor: pointer;
+}
+
+.report-id.copyable:hover {
+  color: #6B7280;
+  text-decoration: underline;
+}
+
+.report-id.copyable:active {
+  color: #1A936F;
+}
+
 .main-title {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 36px;
   font-weight: 700;
   color: #111827;
@@ -2395,7 +2413,7 @@ watch(() => props.reportId, (newId) => {
 }
 
 .sub-title {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 16px;
   color: #6B7280;
   font-style: italic;
@@ -2461,7 +2479,7 @@ watch(() => props.reportId, (newId) => {
 }
 
 .section-title {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 24px;
   font-weight: 600;
   color: #111827;
@@ -2486,7 +2504,7 @@ watch(() => props.reportId, (newId) => {
 
 /* Generated Content */
 .generated-content {
-  font-family: 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.8;
   color: #374151;
@@ -2499,7 +2517,7 @@ watch(() => props.reportId, (newId) => {
 .generated-content :deep(.md-h2),
 .generated-content :deep(.md-h3),
 .generated-content :deep(.md-h4) {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   color: #111827;
   margin-top: 1.5em;
   margin-bottom: 0.8em;
@@ -2527,7 +2545,7 @@ watch(() => props.reportId, (newId) => {
   margin: 1.5em 0;
   color: #6B7280;
   font-style: italic;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
 }
 
 .generated-content :deep(.code-block) {
@@ -2566,7 +2584,7 @@ watch(() => props.reportId, (newId) => {
 }
 
 .loading-text {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 15px;
   color: #4B5563;
 }
@@ -2591,7 +2609,7 @@ watch(() => props.reportId, (newId) => {
 
 /* Content Styles Override for this view */
 .generated-content :deep(.md-h2) {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 18px;
   margin-top: 0;
 }
@@ -2859,7 +2877,7 @@ watch(() => props.reportId, (newId) => {
 }
 
 .wf-step-title {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 13px;
   font-weight: 600;
   color: #111827;
@@ -5115,6 +5133,20 @@ watch(() => props.reportId, (newId) => {
   margin-bottom: 8px;
   font-size: 10px;
   color: #666;
+  cursor: pointer;
+  user-select: none;
+}
+
+.console-logs.collapsed .log-header {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+.log-toggle {
+  font-size: 8px;
+  opacity: 0.5;
+  margin-left: 4px;
 }
 
 .log-title {

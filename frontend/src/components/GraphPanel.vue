@@ -1,7 +1,7 @@
 <template>
   <div class="graph-panel">
     <div class="panel-header">
-      <span class="panel-title">Graph Relationship Visualization</span>
+      <span class="panel-title">Graph Overview</span>
       <!-- Top Toolbar (Internal Top Right) -->
       <div class="header-tools">
         <button class="tool-btn" @click="$emit('refresh')" :disabled="loading" title="Refresh Graph">
@@ -20,14 +20,15 @@
         <svg ref="graphSvg" class="graph-svg"></svg>
         
         <!-- Building/Simulating Hint -->
-        <div v-if="currentPhase === 1 || isSimulating" class="graph-building-hint">
+        <div v-if="(currentPhase === 1 || isSimulating) && !hideUpdateHint" class="graph-building-hint">
           <div class="memory-icon-wrapper">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="memory-icon">
               <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-4.04z" />
               <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-4.04z" />
             </svg>
           </div>
-          {{ isSimulating ? 'GraphRAG long/short-term memory updating in real time' : 'Updating in real time...' }}
+          Updating in real time...
+          <span class="hint-close" @click="hideUpdateHint = true">&times;</span>
         </div>
         
         <!-- Post-simulation Hint -->
@@ -66,7 +67,7 @@
             </div>
             <div class="detail-row">
               <span class="detail-label">UUID:</span>
-              <span class="detail-value uuid-text">{{ selectedItem.data.uuid }}</span>
+              <span class="detail-value uuid-text copyable" @click="copyText(selectedItem.data.uuid)">{{ selectedItem.data.uuid }}</span>
             </div>
             <div class="detail-row" v-if="selectedItem.data.created_at">
               <span class="detail-label">Created:</span>
@@ -129,7 +130,7 @@
                   <div class="self-loop-item-content" v-show="expandedSelfLoops.has(loop.uuid || idx)">
                     <div class="detail-row" v-if="loop.uuid">
                       <span class="detail-label">UUID:</span>
-                      <span class="detail-value uuid-text">{{ loop.uuid }}</span>
+                      <span class="detail-value uuid-text copyable" @click="copyText(loop.uuid)">{{ loop.uuid }}</span>
                     </div>
                     <div class="detail-row" v-if="loop.fact">
                       <span class="detail-label">Fact:</span>
@@ -162,7 +163,7 @@
               
               <div class="detail-row">
                 <span class="detail-label">UUID:</span>
-                <span class="detail-value uuid-text">{{ selectedItem.data.uuid }}</span>
+                <span class="detail-value uuid-text copyable" @click="copyText(selectedItem.data.uuid)">{{ selectedItem.data.uuid }}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Label:</span>
@@ -217,20 +218,35 @@
     <div v-if="graphData && entityTypes.length" class="graph-legend">
       <span class="legend-title">Entity Types</span>
       <div class="legend-items">
-        <div class="legend-item" v-for="type in entityTypes" :key="type.name">
-          <span class="legend-dot" :style="{ background: type.color }"></span>
+        <div
+          class="legend-item"
+          :class="{ hidden: hiddenTypes.has(type.name) }"
+          v-for="type in entityTypes"
+          :key="type.name"
+          @click="toggleEntityType(type.name)"
+        >
+          <span class="legend-dot" :style="{ background: hiddenTypes.has(type.name) ? '#CCC' : type.color }"></span>
           <span class="legend-label">{{ type.name }}</span>
         </div>
       </div>
     </div>
     
     <!-- Edge Labels Toggle -->
-    <div v-if="graphData" class="edge-labels-toggle">
-      <label class="toggle-switch">
-        <input type="checkbox" v-model="showEdgeLabels" />
-        <span class="slider"></span>
-      </label>
-      <span class="toggle-label">Show Edge Labels</span>
+    <div v-if="graphData" class="graph-toggles">
+      <div class="toggle-row">
+        <label class="toggle-switch">
+          <input type="checkbox" v-model="showLinks" />
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label">Show Links</span>
+      </div>
+      <div class="toggle-row">
+        <label class="toggle-switch">
+          <input type="checkbox" v-model="showEdgeLabels" />
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label">Show Edge Labels</span>
+      </div>
     </div>
   </div>
 </template>
@@ -251,9 +267,27 @@ const emit = defineEmits(['refresh', 'toggle-maximize'])
 const graphContainer = ref(null)
 const graphSvg = ref(null)
 const selectedItem = ref(null)
-const showEdgeLabels = ref(true) // Show edge labels by default
+const showLinks = ref(true) // Show node links by default
+const showEdgeLabels = ref(false) // Show edge labels off by default
 const expandedSelfLoops = ref(new Set()) // Expanded self-loop items
 const showSimulationFinishedHint = ref(false) // Post-simulation hint
+const hideUpdateHint = ref(false)
+const hiddenTypes = ref(new Set())
+
+const toggleEntityType = (typeName) => {
+  const s = new Set(hiddenTypes.value)
+  if (s.has(typeName)) {
+    s.delete(typeName)
+  } else {
+    s.add(typeName)
+  }
+  hiddenTypes.value = s
+}
+
+const copyText = (text) => {
+  if (!text) return
+  navigator.clipboard.writeText(text)
+}
 const wasSimulating = ref(false) // Track whether simulation was previously running
 
 // Dismiss simulation finished hint
@@ -656,6 +690,7 @@ const renderGraph = () => {
     .enter().append('circle')
     .attr('r', 10)
     .attr('fill', d => getColor(d.type))
+    .attr('data-entity-type', d => d.type)
     .attr('stroke', '#fff')
     .attr('stroke-width', 2.5)
     .style('cursor', 'pointer')
@@ -735,6 +770,7 @@ const renderGraph = () => {
     .attr('font-weight', '500')
     .attr('dx', 14)
     .attr('dy', 4)
+    .attr('data-entity-type', d => d.type)
     .style('pointer-events', 'none')
     .style('font-family', 'system-ui, sans-serif')
 
@@ -788,6 +824,56 @@ watch(() => props.graphData, () => {
 }, { deep: true })
 
 // Watch edge labels display toggle
+watch(hiddenTypes, (hidden) => {
+  if (!graphSvg.value) return
+  const svg = d3.select(graphSvg.value)
+
+  const isHiddenNode = d => hidden.has(d.type)
+  const isHiddenEdge = d => {
+    if (!d) return false
+    const srcType = d.source?.type || d.sourceType
+    const tgtType = d.target?.type || d.targetType
+    return (srcType && hidden.has(srcType)) || (tgtType && hidden.has(tgtType))
+  }
+
+  // Hide/show nodes and labels
+  svg.selectAll('circle[data-entity-type]')
+    .style('display', d => isHiddenNode(d) ? 'none' : null)
+
+  svg.selectAll('text[data-entity-type]')
+    .style('display', d => isHiddenNode(d) ? 'none' : null)
+
+  // Hide/show edges connected to hidden nodes
+  svg.selectAll('path').each(function(d) {
+    if (d && (d.source || d.sourceType)) {
+      d3.select(this).style('display', isHiddenEdge(d) ? 'none' : null)
+    }
+  })
+
+  svg.selectAll('rect').each(function(d) {
+    if (d && (d.source || d.sourceType)) {
+      d3.select(this).style('display', isHiddenEdge(d) ? 'none' : null)
+    }
+  })
+
+  svg.selectAll('.link-label, .link-label-bg').each(function(d) {
+    if (d) {
+      d3.select(this).style('display', isHiddenEdge(d) ? 'none' : null)
+    }
+  })
+}, { deep: true })
+
+watch(showLinks, (newVal) => {
+  if (!graphSvg.value) return
+  const svg = d3.select(graphSvg.value)
+  svg.selectAll('.links path, .links line').style('display', newVal ? null : 'none')
+  svg.selectAll('.link-label, .link-label-bg, rect').each(function(d) {
+    if (d && (d.source || d.sourceType)) {
+      d3.select(this).style('display', newVal ? null : 'none')
+    }
+  })
+})
+
 watch(showEdgeLabels, (newVal) => {
   if (linkLabelsRef) {
     linkLabelsRef.style('display', newVal ? 'block' : 'none')
@@ -947,6 +1033,21 @@ onUnmounted(() => {
   gap: 6px;
   font-size: 12px;
   color: #555;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s;
+}
+
+.legend-item:hover {
+  opacity: 0.8;
+}
+
+.legend-item.hidden {
+  opacity: 0.4;
+}
+
+.legend-item.hidden .legend-label {
+  text-decoration: line-through;
 }
 
 .legend-dot {
@@ -960,20 +1061,26 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-/* Edge Labels Toggle - Top Right */
-.edge-labels-toggle {
+/* Graph Toggles - Top Right */
+.graph-toggles {
   position: absolute;
   top: 60px;
   right: 20px;
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   background: #FFF;
   padding: 8px 14px;
-  border-radius: 20px;
+  border-radius: 12px;
   border: 1px solid #E0E0E0;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
   z-index: 10;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .toggle-switch {
@@ -1038,7 +1145,7 @@ input:checked + .slider:before {
   border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.1);
   overflow: hidden;
-  font-family: 'Noto Sans SC', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   font-size: 13px;
   z-index: 20;
   display: flex;
@@ -1115,6 +1222,19 @@ input:checked + .slider:before {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
   color: #666;
+}
+
+.detail-value.uuid-text.copyable {
+  cursor: pointer;
+}
+
+.detail-value.uuid-text.copyable:hover {
+  color: #000;
+  text-decoration: underline;
+}
+
+.detail-value.uuid-text.copyable:active {
+  color: #1A936F;
 }
 
 .detail-value.fact-text {
@@ -1230,6 +1350,18 @@ input:checked + .slider:before {
   font-weight: 500;
   letter-spacing: 0.5px;
   z-index: 100;
+}
+
+.hint-close {
+  cursor: pointer;
+  font-size: 16px;
+  opacity: 0.6;
+  margin-left: 4px;
+  line-height: 1;
+}
+
+.hint-close:hover {
+  opacity: 1;
 }
 
 .memory-icon-wrapper {

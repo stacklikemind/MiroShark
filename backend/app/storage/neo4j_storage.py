@@ -64,7 +64,7 @@ class Neo4jStorage(GraphStorage):
     def _ensure_schema(self):
         """Create indexes and constraints if they don't exist."""
         with self._driver.session() as session:
-            for query in neo4j_schema.ALL_SCHEMA_QUERIES:
+            for query in neo4j_schema.get_all_schema_queries():
                 try:
                     session.run(query)
                 except Exception as e:
