@@ -18,11 +18,20 @@ MiroShark runs **entirely on local infrastructure** — Neo4j for the knowledge 
 ## Screenshots
 
 <div align="center">
-<img src="./screen1.png" alt="MiroShark Screenshot 1" width="80%"/>
-<br/><br/>
-<img src="./screen2.png" alt="MiroShark Screenshot 2" width="80%"/>
-<br/><br/>
-<img src="./screen3.png" alt="MiroShark Screenshot 3" width="80%"/>
+<table>
+<tr>
+<td><img src="./screen1.png" alt="Screenshot 1" width="100%"/></td>
+<td><img src="./screen2.png" alt="Screenshot 2" width="100%"/></td>
+</tr>
+<tr>
+<td><img src="./screen3.png" alt="Screenshot 3" width="100%"/></td>
+<td><img src="./screen4.png" alt="Screenshot 4" width="100%"/></td>
+</tr>
+<tr>
+<td><img src="./screen5.png" alt="Screenshot 5" width="100%"/></td>
+<td><img src="./screen6.png" alt="Screenshot 6" width="100%"/></td>
+</tr>
+</table>
 </div>
 
 ## Workflow
