@@ -5,8 +5,16 @@ import SimulationView from '../views/SimulationView.vue'
 import SimulationRunView from '../views/SimulationRunView.vue'
 import ReportView from '../views/ReportView.vue'
 import InteractionView from '../views/InteractionView.vue'
+import Login from '../views/Login.vue'
+import { isAuthenticated } from '../store/auth'
 
 const routes = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login,
+    meta: { public: true }
+  },
   {
     path: '/',
     name: 'Home',
@@ -47,6 +55,16 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+router.beforeEach((to, from, next) => {
+  if (to.meta.public) {
+    return next()
+  }
+  if (!isAuthenticated()) {
+    return next({ name: 'Login', query: { redirect: to.fullPath } })
+  }
+  next()
 })
 
 export default router
