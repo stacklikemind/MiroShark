@@ -76,9 +76,28 @@ def create_app(config_class=Config):
     
     # Register blueprints
     from .api import graph_bp, simulation_bp, report_bp
+    from .api.auth import auth_bp, verify_token
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(graph_bp, url_prefix='/api/graph')
     app.register_blueprint(simulation_bp, url_prefix='/api/simulation')
     app.register_blueprint(report_bp, url_prefix='/api/report')
+
+    # --- Lightweight auth middleware ---
+    # If AUTH_USERNAME + AUTH_PASSWORD are set, every /api/ request
+    # (except /api/auth/*) must carry a valid Bearer token.
+    @app.before_request
+    def check_auth():
+        if not app.config.get('AUTH_USERNAME') or not app.config.get('AUTH_PASSWORD'):
+            return  # auth not configured — allow everything
+        if request.path.startswith('/api/auth/'):
+            return  # login endpoint is public
+        if not request.path.startswith('/api/'):
+            return  # non-API routes (health, static) are public
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer ') and verify_token(auth_header[7:]):
+            return
+        from flask import jsonify
+        return jsonify(success=False, error='Authentication required'), 401
     
     # Health check
     @app.route('/health')

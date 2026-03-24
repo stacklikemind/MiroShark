@@ -23,6 +23,10 @@ class Config:
     # Flask configuration
     SECRET_KEY = os.environ.get('SECRET_KEY', 'miroshark-secret-key')
     DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'
+
+    # Authentication (lightweight hardcoded credentials via env vars)
+    AUTH_USERNAME = os.environ.get('AUTH_USERNAME', '')
+    AUTH_PASSWORD = os.environ.get('AUTH_PASSWORD', '')
     
     # JSON configuration - disable ASCII escaping, display non-ASCII characters directly (instead of \uXXXX format)
     JSON_AS_ASCII = False
